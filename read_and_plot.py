@@ -5,6 +5,9 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 
+
+# This file is deprecated, please use the read_and_plot.ipynb as example.
+
 filename = 'N[0]EPS[0.01]cifar_cnn_2000_C[0.1]_iid[1]_E[1]_B[10].pickle'
 
 infile = open(filename,'rb')
