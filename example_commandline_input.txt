@@ -1,0 +1,1 @@
+python3 src/federated_main.py --epochs=15 --local_ep=1 --model=cnn --normalize=0 --epsilon=0 --dataset=cifar --iid=0 --seed=1 --gpu=cuda:0 --momentum=0 --inference=0
