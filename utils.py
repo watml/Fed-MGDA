@@ -50,11 +50,18 @@ def get_dataset(args):
             transforms.ToTensor(),
             transforms.Normalize((0.1307,), (0.3081,))])
 
-        train_dataset = datasets.MNIST(data_dir, train=True, download=True,
+        if args.dataset == 'mnist':
+            train_dataset = datasets.MNIST(data_dir, train=True, download=True,
                                        transform=apply_transform)
 
-        test_dataset = datasets.MNIST(data_dir, train=False, download=True,
+            test_dataset = datasets.MNIST(data_dir, train=False, download=True,
                                       transform=apply_transform)
+        elif args.dataset == 'fmnist':
+            train_dataset = datasets.FashionMNIST(data_dir, train=True, download=True,
+                                       transform=apply_transform)
+
+            test_dataset = datasets.FashionMNIST(data_dir, train=False, download=True,
+                                       transform=apply_transform)
 
         # sample training data amongst users
         if args.iid:
