@@ -28,7 +28,6 @@ def noniid(dataset, num_users, num_shards=500, num_imgs=100):
     :param num_users:
     :return:
     """
-    # 60,000 training imgs -->  200 imgs/shard X 300 shards
     idx_shard = [i for i in range(num_shards)]
     dict_users = {i: np.array([]) for i in range(num_users)}
     idxs = np.arange(num_shards*num_imgs)
@@ -39,9 +38,10 @@ def noniid(dataset, num_users, num_shards=500, num_imgs=100):
     idxs_labels = idxs_labels[:, idxs_labels[1, :].argsort()]
     idxs = idxs_labels[0, :]
 
-    # divide and assign 5 shards/client
+    # divide and assign shards/client
+    shard = int(num_shards/100)
     for i in range(num_users):
-        rand_set = set(np.random.choice(idx_shard, 5, replace=False))
+        rand_set = set(np.random.choice(idx_shard, shard, replace=False))
         idx_shard = list(set(idx_shard) - rand_set)
         for rand in rand_set:
             dict_users[i] = np.concatenate(

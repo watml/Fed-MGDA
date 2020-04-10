@@ -67,7 +67,7 @@ def get_dataset(args):
                 user_groups = mnist_noniid_unequal(train_dataset, args.num_users)
             else:
                 # Chose euqal splits for every user
-                user_groups = noniid(train_dataset, args.num_users)
+                user_groups = noniid(train_dataset, args.num_users, 300, 200)
 
     return train_dataset, test_dataset, user_groups
 
