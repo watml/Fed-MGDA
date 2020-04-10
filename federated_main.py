@@ -44,11 +44,13 @@ if __name__ == '__main__':
 
     # BUILD MODEL
     if args.model == 'cnn':
-        # Convolutional neural netork
+        # Convolutional neural network
         if args.dataset == 'mnist':
             global_model = CNNMnist(args=args)
         elif args.dataset == 'fmnist':
-            global_model = CNNFashion_Mnist(args=args)
+            print('using Fashion MNIST')
+            #global_model = CNNFashion_Mnist(args=args)
+            global_model = CNNMnist(args=args)
         elif args.dataset == 'cifar':
             global_model = CNNCifar(args=args)
 

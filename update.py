@@ -102,7 +102,7 @@ class LocalUpdate(object):
                 difference[key] = model.state_dict()[key] - old_weights[key]
 
         # normalize the gradient
-        total = self.norm(difference, lr)  # the norm to compute
+        total = self.norm(difference, self.args.lr)  # the norm to compute
         if self.args.normalize:
             for key in difference.keys():
                 difference[key] /= total
