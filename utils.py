@@ -6,6 +6,7 @@ import copy
 import torch
 from torchvision import datasets, transforms
 from sampling import iid, noniid, mnist_noniid_unequal
+from torch.utils import data
 import numpy as np
 import quadprog
 
@@ -14,6 +15,17 @@ def get_dataset(args):
     the keys are the user index and the values are the corresponding data for
     each of those users.
     """
+
+    if args.dataset == 'adult':
+        data_dir = './data/adult/numpy/'
+        if args.iid:
+            train_X = np.load(data_dir + 'X_train.npy')
+            train_y = np.load(data_dir + 'y_train.npy')
+            test_X = np.load(data_dir + 'X_test.npy')
+            test_y = np.load(data_dir + 'y_test.npy')
+            train_dataset = data.TensorDataset(torch.from_numpy(train_X),torch.from_numpy(train_y))
+            test_dataset = data.TensorDataset(torch.from_numpy(test_X),torch.from_numpy(test_y))
+            user_groups = iid(train_dataset, args.num_users)
 
     if args.dataset == 'cifar':
         data_dir = '../data/cifar/'
@@ -50,11 +62,18 @@ def get_dataset(args):
             transforms.ToTensor(),
             transforms.Normalize((0.1307,), (0.3081,))])
 
-        train_dataset = datasets.MNIST(data_dir, train=True, download=True,
-                                       transform=apply_transform)
+        if args.dataset == 'mnist':
+            train_dataset = datasets.MNIST(data_dir, train=True, download=True,
+                                           transform=apply_transform)
 
-        test_dataset = datasets.MNIST(data_dir, train=False, download=True,
-                                      transform=apply_transform)
+            test_dataset = datasets.MNIST(data_dir, train=False, download=True,
+                                          transform=apply_transform)
+        elif args.dataset == 'fmnist':
+            train_dataset = datasets.FashionMNIST(data_dir, train=True, download=True,
+                                                  transform=apply_transform)
+
+            test_dataset = datasets.FashionMNIST(data_dir, train=False, download=True,
+                                                 transform=apply_transform)
 
         # sample training data amongst users
         if args.iid:
@@ -67,7 +86,7 @@ def get_dataset(args):
                 user_groups = mnist_noniid_unequal(train_dataset, args.num_users)
             else:
                 # Chose euqal splits for every user
-                user_groups = noniid(train_dataset, args.num_users)
+                user_groups = noniid(train_dataset, args.num_users, 300, 200)
 
     return train_dataset, test_dataset, user_groups
 

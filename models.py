@@ -42,6 +42,16 @@ class CNNMnist(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
 
+class Adult(nn.Module):   # logistic regression for adult dataset
+    def __init__(self, dim_in=99, dim_out=2):
+        super(Adult, self).__init__()
+        self.lin = nn.Linear(dim_in, dim_out)
+        # self.softmax = nn.Softmax(dim=1)
+        
+    def forward(self, x):
+        x = self.lin(x.float())
+        x = F.log_softmax(x, dim=1)
+        return x
 
 class CNNFashion_Mnist(nn.Module):
     def __init__(self, args):

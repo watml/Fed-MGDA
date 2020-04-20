@@ -23,9 +23,13 @@ def args_parser():
     parser.add_argument('--local_bs', type=int, default=10,
                         help="local batch size: B")
     parser.add_argument('--lr', type=float, default=0.01,
-                        help='learning rate')
+                        help='local learning rate')
     parser.add_argument('--momentum', type=float, default=0.5,
                         help='SGD momentum (default: 0.5)')
+    parser.add_argument('--global_lr', type=float, default=1,
+                        help='global learning rate')
+    parser.add_argument('--global_lr_decay', type=float, default=1,
+                        help='Global learning rate decay every 100 rounds. Default is 1, means no decay.')
 
     # model arguments
     parser.add_argument('--model', type=str, default='mlp', help='model name')

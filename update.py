@@ -10,7 +10,6 @@ from torch.nn.utils.convert_parameters import parameters_to_vector
 from torch.nn.utils.convert_parameters import vector_to_parameters
 import numpy as np
 
-
 class DatasetSplit(Dataset):
     """An abstract Dataset class wrapped around Pytorch Dataset class.
     """
@@ -110,6 +109,12 @@ class LocalUpdate(object):
             total = np.sqrt(total.item())
             for key in difference.keys():
                 difference[key] /= total
+
+
+
+        # normalize the gradient
+        #if self.args.normalize:
+            #print("normalize is true, but haven't implemented yet")
 
 
         return difference, sum(epoch_loss) / len(epoch_loss)
