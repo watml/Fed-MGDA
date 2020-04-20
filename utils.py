@@ -75,6 +75,7 @@ def get_dataset(args):
             test_dataset = datasets.FashionMNIST(data_dir, train=False, download=True,
                                                  transform=apply_transform)
 
+
         # sample training data amongst users
         if args.iid:
             # Sample IID user data from Mnist

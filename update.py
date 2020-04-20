@@ -101,15 +101,23 @@ class LocalUpdate(object):
                 difference[key] = model.state_dict()[key] - old_weights[key]
 
         # normalize the gradient
+        total = self.norm(difference, self.args.lr)  # the norm to compute
         if self.args.normalize:
-            total = 0.0  # the norm to compute
-            # print("difference: ", difference)
-            for key in difference.keys():
-                total += torch.norm(difference[key])**2
-            total = np.sqrt(total.item())
             for key in difference.keys():
                 difference[key] /= total
 
+        return difference, sum(epoch_loss) / len(epoch_loss)
+
+    def norm(self, difference, lr, bignorm=False):
+        total = 0.0  # the norm to compute
+        # print("difference: ", difference)
+        for key in difference.keys():
+            total += torch.norm(difference[key])**2
+        total = np.sqrt(total.item())
+        if bignorm:    # this norm will be big
+            total /= (lr * self.args.local_ep)
+        print("norm of the difference: ", total)
+        return total
 
 
         # normalize the gradient
