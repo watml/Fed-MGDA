@@ -6,9 +6,17 @@ import copy
 import torch
 from torchvision import datasets, transforms
 from sampling import iid, noniid, mnist_noniid_unequal
+from sampling import noniid_adult
 from torch.utils import data
 import numpy as np
 import quadprog
+
+data_dir = './data/adult/numpy/'
+train_X = np.load(data_dir + 'X_train.npy')
+train_y = np.load(data_dir + 'y_train.npy')
+test_X = np.load(data_dir + 'X_test.npy')
+test_y = np.load(data_dir + 'y_test.npy')
+train_dataset = data.TensorDataset(torch.from_numpy(train_X),torch.from_numpy(train_y))
 
 def get_dataset(args):
     """ Returns train and test datasets and a user group which is a dict where
@@ -17,15 +25,19 @@ def get_dataset(args):
     """
 
     if args.dataset == 'adult':
+        print('args.dataset', args.dataset)
         data_dir = './data/adult/numpy/'
+        train_X = np.load(data_dir + 'X_train.npy')
+        train_y = np.load(data_dir + 'y_train.npy')
+        test_X = np.load(data_dir + 'X_test.npy')
+        test_y = np.load(data_dir + 'y_test.npy')
+        train_dataset = data.TensorDataset(torch.from_numpy(train_X),torch.from_numpy(train_y))
+        test_dataset = data.TensorDataset(torch.from_numpy(test_X),torch.from_numpy(test_y))
         if args.iid:
-            train_X = np.load(data_dir + 'X_train.npy')
-            train_y = np.load(data_dir + 'y_train.npy')
-            test_X = np.load(data_dir + 'X_test.npy')
-            test_y = np.load(data_dir + 'y_test.npy')
-            train_dataset = data.TensorDataset(torch.from_numpy(train_X),torch.from_numpy(train_y))
-            test_dataset = data.TensorDataset(torch.from_numpy(test_X),torch.from_numpy(test_y))
             user_groups = iid(train_dataset, args.num_users)
+        else:
+            print('noniid')
+            user_groups = noniid_adult(train_dataset, args.num_users)  
 
     if args.dataset == 'cifar':
         data_dir = '../data/cifar/'
@@ -52,7 +64,7 @@ def get_dataset(args):
                 # Chose euqal splits for every user
                 user_groups = noniid(train_dataset, args.num_users, 500, 100)
 
-    elif args.dataset == 'mnist' or 'fmnist':
+    elif args.dataset == 'mnist' or args.dataset == 'fmnist':
         if args.dataset == 'mnist':
             data_dir = '../data/mnist/'
         else:

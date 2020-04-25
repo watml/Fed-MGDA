@@ -25,13 +25,6 @@ from torch.nn.utils.convert_parameters import vector_to_parameters
 
 
 
-
-
-
-
-
-
-
 if __name__ == '__main__':
     start_time = time.time()
 
