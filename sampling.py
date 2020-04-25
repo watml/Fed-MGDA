@@ -23,7 +23,7 @@ def iid(dataset, num_users):
 
 
 
-def noniid(dataset, num_users, num_shards=500, num_imgs=100):
+def noniid(dataset, num_users=100, num_shards=500, num_imgs=100):
     """
     Sample non-I.I.D client data from MNIST dataset
     :param dataset:
@@ -41,7 +41,7 @@ def noniid(dataset, num_users, num_shards=500, num_imgs=100):
     idxs = idxs_labels[0, :]
 
     # divide and assign shards/client
-    shard = int(num_shards/100)
+    shard = int(num_shards/num_users)
     for i in range(num_users):
         rand_set = set(np.random.choice(idx_shard, shard, replace=False))
         idx_shard = list(set(idx_shard) - rand_set)
@@ -50,7 +50,7 @@ def noniid(dataset, num_users, num_shards=500, num_imgs=100):
                 (dict_users[i], idxs[rand*num_imgs:(rand+1)*num_imgs]), axis=0)
     return dict_users
 
-def noniid_adult(dataset, num_users, num_vecs=100):
+def noniid_adult(dataset, num_users=100, num_vecs=100):
     """
     Sample non-I.I.D client data from MNIST dataset
     :param dataset:
@@ -70,7 +70,7 @@ def noniid_adult(dataset, num_users, num_vecs=100):
     idxs = idxs_labels[0, :]
 
     # divide and assign shards/client
-    shard = int(num_shards/100)
+    shard = int(num_shards/num_users)
     for i in range(num_users):
         rand_set = set(np.random.choice(idx_shard, shard, replace=False))
         idx_shard = list(set(idx_shard) - rand_set)
