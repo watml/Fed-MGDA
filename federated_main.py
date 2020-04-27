@@ -25,6 +25,7 @@ from torch.nn.utils.convert_parameters import vector_to_parameters
 
 
 
+
 if __name__ == '__main__':
     start_time = time.time()
 
@@ -42,7 +43,19 @@ if __name__ == '__main__':
     # load dataset and user groups
     train_dataset, test_dataset, user_groups = get_dataset(args)
 
+    # On Adult dataset, we also test performance on phd and non-phd domain
+    if args.dataset == 'adult':
+        data_dir = './data/adult/numpy/'
+        X_test_phd = np.load(data_dir + 'X_test_phd.npy')
+        y_test_phd = np.load(data_dir + 'y_test_phd.npy')
+        X_test_non_phd = np.load(data_dir + 'X_test_non_phd.npy')
+        y_test_non_phd = np.load(data_dir + 'y_test_non_phd.npy')
+        phd_test_dataset = data.TensorDataset(torch.from_numpy(X_test_phd),torch.from_numpy(y_test_phd))
+        non_phd_test_dataset = data.TensorDataset(torch.from_numpy(X_test_non_phd), torch.from_numpy(y_test_non_phd))
+
+
     # BUILD MODEL
+
     if args.model == 'cnn':
         # Convolutional neural network
         if args.dataset == 'mnist':
@@ -60,7 +73,7 @@ if __name__ == '__main__':
         len_in = 1
         for x in img_size:
             len_in *= x
-            global_model = MLP(dim_in=len_in, dim_hidden=64,
+        global_model = MLP(dim_in=len_in, dim_hidden=64,
                                dim_out=args.num_classes)
     elif args.model == 'lr':  # logistic regression
         if args.dataset == 'adult':
@@ -85,9 +98,6 @@ if __name__ == '__main__':
     cv_loss, cv_acc = [], []
     print_every = 10
     val_loss_pre, counter = 0, 0
-
-    eta = args.global_lr
-    decay = args.global_lr_decay
 
     for epoch in tqdm(range(args.epochs)):
         local_weights, local_losses = [], []
@@ -132,7 +142,7 @@ if __name__ == '__main__':
         new_global_weights = copy.deepcopy(old_global_weights)
         for key in new_global_weights.keys():
             for i in range(n):
-                new_global_weights[key] += eta * gradient_coefficients[i] * local_weights[i][key]
+                new_global_weights[key] += gradient_coefficients[i] * local_weights[i][key]
 
 
 
@@ -189,9 +199,15 @@ if __name__ == '__main__':
     # Test inference after completion of training
     test_acc, test_loss = test_inference(args, global_model, test_dataset)
 
+    # For Adult dataset, also test on phd and non-phd domain
+    phd_test_acc, phd_test_loss = test_inference(args,global_model,phd_test_dataset)
+    non_phd_test_acc, non_phd_test_loss = test_inference(args, global_model, non_phd_test_dataset)
+
     print(f' \n Results after {args.epochs} global rounds of training:')
     print("|---- Avg Train Accuracy: {:.2f}%".format(100*train_accuracy[-1]))
     print("|---- Test Accuracy: {:.2f}%".format(100*test_acc))
+    print("|---- Test Accuracy phd: {:.2f}%".format(100 * phd_test_acc))
+    print("|---- Test Accuracy non-phd: {:.2f}%".format(100 * non_phd_test_acc))
     print('\n Total Run Time: {0:0.4f}'.format(time.time() - start_time))
 
     # Saving the objects train_loss and train_accuracy:
@@ -199,35 +215,34 @@ if __name__ == '__main__':
     # file_name = "save/objects/N[{}]EPS[{}]{}_{}_{}_C[{}]_iid[{}]_E[{}]_B[{}].pickle".format(args.normalize,args.epsilon,args.dataset, args.model, args.epochs, args.frac, args.iid,
     #            args.local_ep, args.local_bs)
 
-    file_name = "Ep[{}]_frac[{}]_{}_{}_{}_{}_Mom[{}]_{}_N[{}]_EPS[{}]_{}_iid[{}]_seed[{}]_decay[{}].pickle".format(args.epochs,
+    
+    file_name = "save/objects/Ep[{}]_frac[{}]_{}_{}_{}_Mom[{}]_{}_N[{}]_EPS[{}]_{}_iid[{}]_seed[{}].pickle".format(args.epochs,
                                                                                             args.frac, args.local_ep,
-                                                                                            args.local_bs, args.lr, args.global_lr,
+                                                                                            args.local_bs, args.lr,
                                                                                             args.momentum, args.model,
                                                                                             args.normalize,args.epsilon,
-                                                                                            args.dataset,args.iid,args.seed,args.global_lr_decay)
+                                                                                            args.dataset,args.iid,args.seed)
 
-    file_name2 = "Ep[{}]_frac[{}]_{}_{}_{}_{}_Mom[{}]_{}_N[{}]_EPS[{}]_{}_iid[{}]_seed[{}]_decay[{}].log".format(
+    file_name2 = "save/objects/Ep[{}]_frac[{}]_{}_{}_{}_Mom[{}]_{}_N[{}]_EPS[{}]_{}_iid[{}]_seed[{}].log".format(
         args.epochs,
         args.frac, args.local_ep,
-        args.local_bs, args.lr, args.global_lr,
+        args.local_bs, args.lr,
         args.momentum, args.model,
         args.normalize, args.epsilon,
-        args.dataset, args.iid, args.seed,args.global_lr_decay)
-
-    if args.iid:
-        folder = "save/objects/improve/iid"
-    else:
-        folder = "save/objects/improve/noniid"
+        args.dataset, args.iid, args.seed)
+    
+    folder="save/objects"
 
     THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
+    my_file = os.path.join(THIS_FOLDER, file_name)
+    my_file2 = os.path.join(THIS_FOLDER, file_name2)
+
+
     my_folder = os.path.join(THIS_FOLDER,folder)
 
     # make sure the folder exists
     if not os.path.isdir(my_folder):
         os.mkdir(my_folder)
-
-    my_file = os.path.join(my_folder, file_name)
-    my_file2 = os.path.join(my_folder, file_name2)
 
 
     if args.inference:
@@ -246,8 +261,6 @@ if __name__ == '__main__':
         txtfile.write("\n Number of local epochs per round: {}".format(args.local_ep))
         txtfile.write("\n Local minibatch size: {}".format(args.local_bs))
         txtfile.write("\n Local learning rate: {}".format(args.lr))
-        txtfile.write("\n Global learning rate: {}".format(args.global_lr))
-        txtfile.write("\n Global learning rate decay: {}".format(args.global_lr_decay))
         txtfile.write("\n SGD momentum: {}".format(args.momentum))
         txtfile.write("\n NN model: {}".format(args.model))
         txtfile.write("\n Gradient Normalization: {}".format(args.normalize))
@@ -262,6 +275,8 @@ if __name__ == '__main__':
         txtfile.write(' \n Results after {} global rounds of training:'.format(args.epochs))
         txtfile.write("\n |---- Avg Train Accuracy: {:.2f}%".format(100*train_accuracy[-1]))
         txtfile.write("\n |---- Test Accuracy: {:.2f}%".format(100*test_acc))
+        txtfile.write("\n |---- Test Accuracy phd: {:.2f}%".format(100 * phd_test_acc))
+        txtfile.write("\n |---- Test Accuracy non-phd: {:.2f}%".format(100 * non_phd_test_acc))
         txtfile.write('\n Total Run Time: {0:0.4f}'.format(time.time() - start_time))
 
 
