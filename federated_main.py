@@ -233,8 +233,11 @@ if __name__ == '__main__':
         args.momentum, args.model,
         args.normalize, args.epsilon,
         args.dataset, args.iid, args.seed, args.global_lr_decay)
-    
-    folder="save/objects"
+
+    if args.iid:
+        folder = "save/objects/iid"
+    else:
+        folder = "save/objects/noniid"
 
     THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
     my_folder = os.path.join(THIS_FOLDER, folder)
