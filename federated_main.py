@@ -85,6 +85,8 @@ if __name__ == '__main__':
     global_model.to(device)
     global_model.train()
     print(global_model)
+    model_total_params = [p.numel() for p in global_model.parameters() if p.requires_grad]
+    print('model trainable parameter count: sum{}={}\n'.format(model_total_params, sum(model_total_params)))
 
     # copy weights
     old_global_weights = global_model.state_dict()
@@ -93,59 +95,135 @@ if __name__ == '__main__':
     if args.inference:
         train_loss_improve_percentage = []
         train_acc_improve_percentage = []
+        # followings are new variables
+        train_loss_improve_percentage_post = []
+        train_acc_improve_percentage_post = []
+        test_acc_users = []
     train_loss, train_accuracy = [], []
+    user_test_accuracy, user_test_loss = [], []
     val_acc_list, net_list = [], []
     cv_loss, cv_acc = [], []
     print_every = 10
     val_loss_pre, counter = 0, 0
+    # new
+    total_accuracy = []
+    vip_training_loss, vip_training_accuracy = [], []
 
     eta = args.global_lr
     decay = args.global_lr_decay
 
     for epoch in tqdm(range(args.epochs)):
-        local_weights, local_losses = [], []
+        # local_weights, local_losses = [], []
+        local_weights, local_losses, local_norms = [], [], []
         print(f'\n | Global Training Round : {epoch+1} |\n')
 
         global_model.train()
         m = max(int(args.frac * args.num_users), 1)
-        idxs_users = np.random.choice(range(args.num_users), m, replace=False)
-
+        # idxs_users = np.random.choice(range(args.num_users), m, replace=False)
+        if args.vip == -1:
+            idxs_users = np.random.choice(range(args.num_users), m, replace=False)
+        else:
+            idxs_users = np.random.choice(range(args.num_users), m, replace=False)
+            if args.vip in idxs_users:
+                idx_vip = np.where(idxs_users==args.vip)
+                idxs_users[idx_vip], idxs_users[-1] = idxs_users[-1], idxs_users[idx_vip]
+            else:
+                idxs_users[-1] = args.vip
 
 
         # Do an inference on selected participants to get training loss, training accuracy, testing accuracy
         if args.inference:
-            user_train_accuracy_list, user_train_loss_list = [], []
+            # user_train_accuracy_list, user_train_loss_list = [], []
+            user_train_accuracy_list, user_train_loss_list, user_train_accu_post, user_train_loss_post = [], [], [], []
             for idx in idxs_users:
                 local_model = LocalUpdate(args=args,dataset=train_dataset,idxs=user_groups[idx],logger=logger)
                 user_train_accuracy, user_train_loss = local_model.inference_trainloader(model=global_model)
                 user_train_accuracy_list.append(user_train_accuracy)
                 user_train_loss_list.append(user_train_loss)
+        else:
+            user_train_accuracy_list, user_train_loss_list, user_train_accu_post, user_train_loss_post = [], [], [], []
+            for idx in idxs_users:
+                local_model = LocalUpdate(args=args, dataset=train_dataset, idxs=user_groups[idx], logger=logger)
+                user_train_accuracy, user_train_loss = local_model.inference_trainloader(model=global_model)
+                user_train_accuracy_list.append(user_train_accuracy)
+                user_train_loss_list.append(user_train_loss)
+
 
 
         for idx in idxs_users:
             local_model = LocalUpdate(args=args, dataset=train_dataset,
                                       idxs=user_groups[idx], logger=logger)
-            w, loss = local_model.update_weights(
+            #w, loss = local_model.update_weights(
+            #    model=copy.deepcopy(global_model), global_round=epoch)
+            w, loss, loss_post, accuracy_post, norm = local_model.update_weights(
                 model=copy.deepcopy(global_model), global_round=epoch)
 
             local_weights.append(copy.deepcopy(w))
             local_losses.append(copy.deepcopy(loss))
+            # new
+            local_norms.append(copy.deepcopy(norm))
+            user_train_accu_post.append(copy.deepcopy(accuracy_post))
+            user_train_loss_post.append(copy.deepcopy(loss_post))
 
         # compute common gradient direction
-        n = len(local_weights)
-        if args.epsilon != 0:
-            gradient_coefficients = solve_centered_w(local_weights,epsilon=args.epsilon)
-        else:
-            gradient_coefficients = 1./n * np.ones(n,dtype=float)
+        # n = len(local_weights)
+        # if args.epsilon != 0:
+        #     gradient_coefficients = solve_centered_w(local_weights,epsilon=args.epsilon)
+        # else:
+        #     gradient_coefficients = 1./n * np.ones(n,dtype=float)
+        if args.qffl == 0: # Update the global model using  {FedAvg, FedMGDA, FedProx, FedMGDAProx}
+            n = len(local_weights)
+            if args.epsilon <= 1 and args.epsilon != 0:
+                gradient_coefficients = solve_centered_w(local_weights, epsilon=args.epsilon)
+            elif args.epsilon == 0:
+                gradient_coefficients = 1./n * np.ones(n, dtype=float)
+
+            # update global weights
+            new_global_weights = copy.deepcopy(old_global_weights)
+
+            if decay <= 1:
+                lr_server = eta * (decay ** (epoch // 100))
+            elif decay == 2:
+                temp = np.array(local_norms)
+                lr_server = np.median(temp)
+
+            for key in new_global_weights.keys():
+                for i in range(n):
+                    new_global_weights[key] += torch.mul(local_weights[i][key], gradient_coefficients[i] * lr_server)
+        else: # Update the global model using q-FFL
+            new_global_weights = copy.deepcopy(old_global_weights)
+            dw = copy.deepcopy(local_weights)
+            for i in range(len(dw)):
+                for key in dw[i].keys():
+                    dw[i][key] *= args.Lipschitz_constant
+            dw_norm = [0] * len(dw)
+            for i in range(len(dw_norm)):
+                total = 0
+                for key in dw[i].keys():
+                    total += torch.norm(dw[i][key])**2
+                dw_norm[i] = total
+            delta = copy.deepcopy(dw)
+            for i in range(len(delta)):
+                for key in delta[i].keys():
+                    delta[i][key] *= user_train_loss_list[i] ** args.qffl
+            h = [0]*len(delta)
+            for i in range(len(h)):
+                h[i] = args.qffl * user_train_loss_list[i]**(args.qffl-1) * dw_norm[i] \
+                       + args.Lipschitz_constant * user_train_loss_list[i]**args.qffl
+            s = sum(h)
+            for key in new_global_weights.keys():
+                for i in range(len(delta)):
+                    new_global_weights[key] += torch.mul(delta[i][key], 1/s)
 
 
 
 
-        # update global weights
-        new_global_weights = copy.deepcopy(old_global_weights)
-        for key in new_global_weights.keys():
-            for i in range(n):
-                new_global_weights[key] += eta * gradient_coefficients[i] * local_weights[i][key]
+
+        # # update global weights
+        # new_global_weights = copy.deepcopy(old_global_weights)
+        # for key in new_global_weights.keys():
+        #     for i in range(n):
+        #         new_global_weights[key] += eta * gradient_coefficients[i] * local_weights[i][key]
 
 
 
@@ -160,6 +238,9 @@ if __name__ == '__main__':
                 user_train_accuracy, user_train_loss = local_model.inference_trainloader(model=global_model)
                 new_user_train_accuracy_list.append(user_train_accuracy)
                 new_user_train_loss_list.append(user_train_loss)
+            if args.vip != -1:
+                vip_training_accuracy.append(user_train_accuracy)
+                vip_training_loss.append(user_train_loss)
 
             train_loss_improve = 0.0
             train_acc_improve = 0.0
@@ -176,8 +257,24 @@ if __name__ == '__main__':
             train_loss_improve_percentage.append(train_loss_improve)
             train_acc_improve_percentage.append(train_acc_improve)
 
+            # NEW. Compare the fraction of improvements pre vs post training
+            train_loss_improve_post = 0.0
+            train_acc_improve_post = 0.0
+            for i in range(len(user_train_loss_list)):
+                if user_train_loss_post[i] <= user_train_loss_list[i]:
+                    train_loss_improve_post += 1
+                if user_train_accu_post[i] >= user_train_accuracy_list[i]:
+                    train_acc_improve_post += 1
+            train_loss_improve_post /= len(user_train_loss_post)
+            train_acc_improve_post /= len(user_train_accu_post)
+
+            train_loss_improve_percentage_post.append(train_loss_improve_post)
+            train_acc_improve_percentage_post.append(train_acc_improve_post)
+
             print("percentage of improved participants (train_loss) is: {}".format(train_loss_improve))
             print("percentage of improved participants (train_acc) is: {}".format(train_acc_improve))
+            print("percentage of improved participants (train_loss pre vs post) is: {}".format(train_loss_improve_post))
+            print("percentage of improved participants (train_acc pre vs post) is: {}".format(train_acc_improve_post))
 
         loss_avg = sum(local_losses) / len(local_losses)
         train_loss.append(loss_avg)
@@ -193,24 +290,37 @@ if __name__ == '__main__':
             list_loss.append(loss)
         train_accuracy.append(sum(list_acc)/len(list_acc))
 
+        # new
+        if epoch % print_every == 0:
+            user_test_accuracy.append(list_acc)
+            user_test_loss.append(list_loss)
+
         # print global training loss after every 'i' rounds
         if (epoch+1) % print_every == 0:
             print(f' \nAvg Training Stats after {epoch+1} global rounds:')
             print(f'Training Loss : {np.mean(np.array(train_loss))}')
             print('Train Accuracy: {:.2f}% \n'.format(100*train_accuracy[-1]))
 
+        # new. Test inference on test set every once a while
+        if epoch % (10*print_every) == 0:
+            test_acc, test_loss = test_inference(args, global_model, test_dataset)
+            total_accuracy.append(test_acc)
+
     # Test inference after completion of training
     test_acc, test_loss = test_inference(args, global_model, test_dataset)
 
+
     # For Adult dataset, also test on phd and non-phd domain
-    phd_test_acc, phd_test_loss = test_inference(args,global_model,phd_test_dataset)
-    non_phd_test_acc, non_phd_test_loss = test_inference(args, global_model, non_phd_test_dataset)
+    if args.dataset == 'adult':
+        phd_test_acc, phd_test_loss = test_inference(args,global_model,phd_test_dataset)
+        non_phd_test_acc, non_phd_test_loss = test_inference(args, global_model, non_phd_test_dataset)
 
     print(f' \n Results after {args.epochs} global rounds of training:')
     print("|---- Avg Train Accuracy: {:.2f}%".format(100*train_accuracy[-1]))
     print("|---- Test Accuracy: {:.2f}%".format(100*test_acc))
-    print("|---- Test Accuracy phd: {:.2f}%".format(100 * phd_test_acc))
-    print("|---- Test Accuracy non-phd: {:.2f}%".format(100 * non_phd_test_acc))
+    if args.dataset == 'adult':
+        print("|---- Test Accuracy phd: {:.2f}%".format(100 * phd_test_acc))
+        print("|---- Test Accuracy non-phd: {:.2f}%".format(100 * non_phd_test_acc))
     print('\n Total Run Time: {0:0.4f}'.format(time.time() - start_time))
 
     # Saving the objects train_loss and train_accuracy:
@@ -218,26 +328,45 @@ if __name__ == '__main__':
     # file_name = "save/objects/N[{}]EPS[{}]{}_{}_{}_C[{}]_iid[{}]_E[{}]_B[{}].pickle".format(args.normalize,args.epsilon,args.dataset, args.model, args.epochs, args.frac, args.iid,
     #            args.local_ep, args.local_bs)
 
-    file_name = "Ep[{}]_frac[{}]_{}_{}_{}_{}_Mom[{}]_{}_N[{}]_EPS[{}]_{}_iid[{}]_seed[{}]_decay[{}].pickle".format(
+    file_name = "Ep[{}]_frac[{}]_{}_{}_{}_{}_Mom[{}]_{}_N[{}]_EPS[{}]_{}_iid[{}]_seed[{}]_decay[{}]_prox[{}]_qffl[{}]_Lipsch[{}].npz".format(
         args.epochs,
         args.frac, args.local_ep,
         args.local_bs, args.lr, args.global_lr,
         args.momentum, args.model,
         args.normalize, args.epsilon,
-        args.dataset, args.iid, args.seed, args.global_lr_decay)
+        args.dataset, args.iid, args.seed, args.global_lr_decay,args.prox_weight, args.qffl, args.Lipschitz_constant)
 
-    file_name2 = "Ep[{}]_frac[{}]_{}_{}_{}_{}_Mom[{}]_{}_N[{}]_EPS[{}]_{}_iid[{}]_seed[{}]_decay[{}].log".format(
+    file_name2 = "Ep[{}]_frac[{}]_{}_{}_{}_{}_Mom[{}]_{}_N[{}]_EPS[{}]_{}_iid[{}]_seed[{}]_decay[{}]_prox[{}]_qffl[{}]_Lipsch[{}].log".format(
         args.epochs,
         args.frac, args.local_ep,
         args.local_bs, args.lr, args.global_lr,
         args.momentum, args.model,
         args.normalize, args.epsilon,
-        args.dataset, args.iid, args.seed, args.global_lr_decay)
+        args.dataset, args.iid, args.seed, args.global_lr_decay,args.prox_weight, args.qffl, args.Lipschitz_constant)
 
-    if args.iid:
-        folder = "save/objects/iid"
+    file_name3 = "Ep[{}]_frac[{}]_{}_{}_{}_{}_Mom[{}]_{}_N[{}]_EPS[{}]_{}_iid[{}]_seed[{}]_decay[{}]_prox[{}]_qffl[{}]_Lipsch[{}].pickle".format(
+        args.epochs,
+        args.frac, args.local_ep,
+        args.local_bs, args.lr, args.global_lr,
+        args.momentum, args.model,
+        args.normalize, args.epsilon,
+        args.dataset, args.iid, args.seed, args.global_lr_decay, args.prox_weight, args.qffl, args.Lipschitz_constant)
+
+    if args.qffl:
+        if args.iid:
+            folder = "save/objects/qffl/iid"
+        else:
+            folder = "save/objects/qffl/noniid"
     else:
-        folder = "save/objects/noniid"
+        if args.iid:
+            folder = "save/objects/mgda/iid"
+        else:
+            folder = "save/objects/mgda/noniid"
+
+    # if args.iid:
+    #     folder = "save/objects/iid"
+    # else:
+    #     folder = "save/objects/noniid"
 
     THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
     my_folder = os.path.join(THIS_FOLDER, folder)
@@ -248,14 +377,22 @@ if __name__ == '__main__':
 
     my_file = os.path.join(my_folder, file_name)
     my_file2 = os.path.join(my_folder, file_name2)
+    my_file3 = os.path.join(my_folder, file_name3)
 
-
+    # if args.inference:
+    #     with open(my_file, 'wb') as f:
+    #         pickle.dump([train_loss, train_accuracy,train_loss_improve_percentage,train_acc_improve_percentage], f)
+    # else:
+    #     with open(my_file, 'wb') as f:
+    #         pickle.dump([train_loss, train_accuracy], f)
     if args.inference:
-        with open(my_file, 'wb') as f:
-            pickle.dump([train_loss, train_accuracy,train_loss_improve_percentage,train_acc_improve_percentage], f)
-    else:
-        with open(my_file, 'wb') as f:
-            pickle.dump([train_loss, train_accuracy], f)
+        np.savez(my_file, acc=[total_accuracy],
+                 res=[train_acc_improve_percentage_post, train_loss_improve_percentage_post,
+                      train_acc_improve_percentage, train_loss_improve_percentage],
+                 vip=[vip_training_accuracy, vip_training_loss], user=[user_test_accuracy, user_test_loss])
+
+    with open(my_file3, 'wb') as f:
+        pickle.dump([train_loss, train_accuracy], f)
 
     with open(my_file2,'w') as txtfile:
         txtfile.write("Configurations: ")
@@ -264,6 +401,9 @@ if __name__ == '__main__':
         txtfile.write("\n Number of users: {}".format(args.num_users))
         txtfile.write("\n Fraction of participants in each round: {}".format(args.frac))
         txtfile.write("\n Number of local epochs per round: {}".format(args.local_ep))
+        txtfile.write("\n Proximal weight: {}".format(args.prox_weight))
+        txtfile.write("\n qFFL: {}".format(args.qffl))
+        txtfile.write("\n Lipschitz constant in qFFL: {}".format(args.Lipschitz_constant))
         txtfile.write("\n Local minibatch size: {}".format(args.local_bs))
         txtfile.write("\n Local learning rate: {}".format(args.lr))
         txtfile.write("\n Global learning rate: {}".format(args.global_lr))
@@ -282,8 +422,9 @@ if __name__ == '__main__':
         txtfile.write(' \n Results after {} global rounds of training:'.format(args.epochs))
         txtfile.write("\n |---- Avg Train Accuracy: {:.2f}%".format(100*train_accuracy[-1]))
         txtfile.write("\n |---- Test Accuracy: {:.2f}%".format(100*test_acc))
-        txtfile.write("\n |---- Test Accuracy phd: {:.2f}%".format(100 * phd_test_acc))
-        txtfile.write("\n |---- Test Accuracy non-phd: {:.2f}%".format(100 * non_phd_test_acc))
+        if args.dataset == 'adult':
+            txtfile.write("\n |---- Test Accuracy phd: {:.2f}%".format(100 * phd_test_acc))
+            txtfile.write("\n |---- Test Accuracy non-phd: {:.2f}%".format(100 * non_phd_test_acc))
         txtfile.write('\n Total Run Time: {0:0.4f}'.format(time.time() - start_time))
 
 

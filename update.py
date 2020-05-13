@@ -61,6 +61,10 @@ class LocalUpdate(object):
         #old_weights = parameters_to_vector(model.parameters()).clone().detach()
 
         old_weights = copy.deepcopy(model.state_dict())
+        # new
+        list_param = list(model.parameters())
+        weight_regularizer = nn.MSELoss(reduction='sum')
+
         # Set optimizer for the local updates
         if self.args.optimizer == 'sgd':
             optimizer = torch.optim.SGD(model.parameters(), lr=self.args.lr,
@@ -77,7 +81,18 @@ class LocalUpdate(object):
                 model.zero_grad()
 
                 log_probs = model(images)
-                loss = self.criterion(log_probs, labels)
+                # loss = self.criterion(log_probs, labels)
+
+                # new
+                if self.args.prox_weight:
+                    net_reg = [0]
+                    for i, j in enumerate(old_weights):
+                        net_reg.append(net_reg[-1] + weight_regularizer(list_param[i], old_weights[j]))
+                    loss = self.criterion(log_probs, labels) + self.args.prox_weight * net_reg[-1]
+                else:
+                    loss = self.criterion(log_probs, labels)
+
+
                 loss.backward()
                 optimizer.step()
 
@@ -92,6 +107,26 @@ class LocalUpdate(object):
             epoch_loss.append(sum(batch_loss)/len(batch_loss))
 
         #new_weights = parameters_to_vector(model.parameters()).clone().detach()
+        ######################
+        model.eval()
+        loss, total, correct = 0.0, 0.0, 0.0
+
+        for batch_idx, (images, labels) in enumerate(self.trainloader):
+            images, labels = images.to(self.device), labels.to(self.device)
+
+            # Inference
+            outputs = model(images)
+            batch_loss = self.criterion(outputs, labels)
+            loss += batch_loss.item()
+
+            # Prediction
+            _, pred_labels = torch.max(outputs, 1)
+            pred_labels = pred_labels.view(-1)
+            correct += torch.sum(torch.eq(pred_labels, labels)).item()
+            total += len(labels)
+
+        accuracy = correct/total
+        ######################
 
 
         difference = copy.deepcopy(old_weights)
@@ -100,32 +135,42 @@ class LocalUpdate(object):
             for key in difference.keys():
                 difference[key] = model.state_dict()[key] - old_weights[key]
 
+        # # normalize the gradient
+        # total = self.norm(difference, self.args.lr)  # the norm to compute
+        # if self.args.normalize:
+        #     for key in difference.keys():
+        #         difference[key] /= total
+
         # normalize the gradient
-        total = self.norm(difference, self.args.lr)  # the norm to compute
-        if self.args.normalize:
+        total = []
+        if self.args.normalize == 1:
+            total = 0.0  # the norm to compute
+            for key in difference.keys():
+                total += torch.norm(difference[key])**2
+            total = np.sqrt(total.item())
             for key in difference.keys():
                 difference[key] /= total
 
-        return difference, sum(epoch_loss) / len(epoch_loss)
+        return difference, sum(epoch_loss) / len(epoch_loss), loss, accuracy, total
 
-    def norm(self, difference, lr, bignorm=False):
-        total = 0.0  # the norm to compute
-        # print("difference: ", difference)
-        for key in difference.keys():
-            total += torch.norm(difference[key])**2
-        total = np.sqrt(total.item())
-        if bignorm:    # this norm will be big
-            total /= (lr * self.args.local_ep)
-        print("norm of the difference: ", total)
-        return total
-
-
-        # normalize the gradient
-        #if self.args.normalize:
-            #print("normalize is true, but haven't implemented yet")
-
-
-        return difference, sum(epoch_loss) / len(epoch_loss)
+    # def norm(self, difference, lr, bignorm=False):
+    #     total = 0.0  # the norm to compute
+    #     # print("difference: ", difference)
+    #     for key in difference.keys():
+    #         total += torch.norm(difference[key])**2
+    #     total = np.sqrt(total.item())
+    #     if bignorm:    # this norm will be big
+    #         total /= (lr * self.args.local_ep)
+    #     print("norm of the difference: ", total)
+    #     return total
+    #
+    #
+    #     # normalize the gradient
+    #     #if self.args.normalize:
+    #         #print("normalize is true, but haven't implemented yet")
+    #
+    #
+    #     return difference, sum(epoch_loss) / len(epoch_loss)
 
     def inference(self, model):
         """ Returns the inference accuracy and loss.
