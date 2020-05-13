@@ -54,6 +54,18 @@ def args_parser():
     parser.add_argument('--epsilon', type=float, default=1.,
                         help = "Interpolation between FedMGDA and FedAvg. \
                         When set to 0, recovers FedAvg; When set to 1, is FedMGDA without any constraint")
+    parser.add_argument('--vip', type=int, default=-1,
+                        help='the ID of a user that participates in each communication round; {-1 no vip, 0....number of users}')
+
+    # Proximal arguments
+    parser.add_argument('--prox_weight', type=float, default=0.0,
+                        help='the weight of proximal regularization term in FedProx and FedMGDA')
+
+    # Q-fair federated learning
+    parser.add_argument("--qffl", type=float, default=0.0, help="the q-value in the qffl algorithm. \
+                                                                    qffl with q=0 reduces to FedAvg")
+    parser.add_argument('--Lipschitz_constant', type=float, default=1.0)
+
 
 
     # other arguments
