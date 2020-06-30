@@ -18,7 +18,7 @@ from torch.utils import data
 from options import args_parser
 from update import LocalUpdate, test_inference
 from models import MLP, CNNMnist, CNNFashion_Mnist, CNNCifar, Adult
-from utils import get_dataset, average_weights, exp_details,solve_centered_w
+from utils import get_dataset, average_weights, exp_details,solve_centered_w,solve_capped_w
 from torch.nn.utils.convert_parameters import parameters_to_vector
 from torch.nn.utils.convert_parameters import vector_to_parameters
 
@@ -173,10 +173,14 @@ if __name__ == '__main__':
         #     gradient_coefficients = 1./n * np.ones(n,dtype=float)
         if args.qffl == 0: # Update the global model using  {FedAvg, FedMGDA, FedProx, FedMGDAProx}
             n = len(local_weights)
-            if args.epsilon <= 1 and args.epsilon != 0:
-                gradient_coefficients = solve_centered_w(local_weights, epsilon=args.epsilon)
-            elif args.epsilon == 0:
-                gradient_coefficients = 1./n * np.ones(n, dtype=float)
+            if args.cap == 1:
+                if args.epsilon <= 1 and args.epsilon != 0:
+                    gradient_coefficients = solve_centered_w(local_weights, epsilon=args.epsilon)
+                elif args.epsilon == 0:
+                    gradient_coefficients = 1. / n * np.ones(n, dtype=float)
+            elif 1 > args.cap >= 1./n:
+                gradient_coefficients = solve_capped_w(local_weights,C = args.cap)
+
 
             # update global weights
             new_global_weights = copy.deepcopy(old_global_weights)

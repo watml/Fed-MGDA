@@ -54,6 +54,10 @@ def args_parser():
     parser.add_argument('--epsilon', type=float, default=1.,
                         help = "Interpolation between FedMGDA and FedAvg. \
                         When set to 0, recovers FedAvg; When set to 1, is FedMGDA without any constraint")
+    parser.add_argument('--cap', type=float, default=1.,
+                        help="Capped MGDA parameter, when set to 1, same as default MGDA. \
+                            Set to smaller values to restrict individual participation.")
+
     parser.add_argument('--vip', type=int, default=-1,
                         help='the ID of a user that participates in each communication round; {-1 no vip, 0....number of users}')
 
