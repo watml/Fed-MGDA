@@ -11,12 +11,6 @@ from torch.utils import data
 import numpy as np
 import quadprog
 
-data_dir = './data/adult/numpy/'
-train_X = np.load(data_dir + 'X_train.npy')
-train_y = np.load(data_dir + 'y_train.npy')
-test_X = np.load(data_dir + 'X_test.npy')
-test_y = np.load(data_dir + 'y_test.npy')
-train_dataset = data.TensorDataset(torch.from_numpy(train_X),torch.from_numpy(train_y))
 
 def get_dataset(args):
     """ Returns train and test datasets and a user group which is a dict where
@@ -173,6 +167,34 @@ def solve_centered_w(U,epsilon):
     b = np.zeros(n+1)
     b[0] = 1.
     b_concat = np.concatenate((b,lower_b,upper_b))
+    alpha = quadprog.solve_qp(Q,p,A,b_concat,meq=1)[0]
+    print(alpha)
+    return alpha
+
+
+def solve_capped_w(U,C=1):
+    """
+        U is a list of gradients (stored as state_dict()) from n users
+    """
+
+    n = len(U)
+    K = np.eye(n,dtype=float)
+    for i in range(0,n):
+        for j in range(0,n):
+            K[i,j] = 0
+            for key in U[i].keys():
+                K[i,j] += torch.mul(U[i][key],U[j][key]).sum()
+
+    Q = 0.5 *(K + K.T)
+    p = np.zeros(n,dtype=float)
+    a = np.ones(n,dtype=float).reshape(-1,1)
+    Id = np.eye(n,dtype=float)
+    neg_Id = -1. * np.eye(n,dtype=float)
+    cap_b = (-C) * np.ones(n,dtype=float)
+    A = np.concatenate((a,Id,neg_Id),axis=1)
+    b = np.zeros(n+1)
+    b[0] = 1.
+    b_concat = np.concatenate((b,cap_b))
     alpha = quadprog.solve_qp(Q,p,A,b_concat,meq=1)[0]
     print(alpha)
     return alpha
