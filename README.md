@@ -49,6 +49,10 @@ python3 src/federated_main.py --epochs=2000 --local_ep=1 --model=cnn --epsilon=1
 ```
 python3 src/federated_main.py --epochs=2000 --local_ep=1 --model=cnn --epsilon=1 --dataset=cifar --gpu=cuda:0 --normalize=1 --momentum=0 --inference=1
 ```
+* To run the federated experiment with CIFAR on CNN with capped FedMGDA (non-IID):
+```
+python3 src/federated_main.py --epochs=2000 --local_ep=1 --model=cnn --epsilon=1 --cap=0.5 --dataset=cifar --gpu=cuda:0 --normalize=1 --momentum=0 --iid=0
+```
 
 
 You can change the default values of other parameters to simulate different conditions. Refer to the options section.
@@ -69,6 +73,7 @@ The default values for various paramters parsed to the experiment are given in `
 #### MGDA parameters
 * ```--normalize:```      Apply normalization to gradients. Default set to no normalization. Set to 1 for normalization.
 * ```--epsilon:```      Epsilon-centered constraints. Can be viewed as interpolation between FedMGDA and FedAvg. When set to 0, recovers FedAvg; When set to 1, is FedMGDA. 
+* ```--cap:```      Capped MGDA parameter. When set to 1, same as default MGDA. Set to smaller values to restrict individual dominance.
 
 #### Federated Parameters
 * ```--iid:```      Distribution of data amongst users. Default set to IID. Set to 0 for non-IID.
