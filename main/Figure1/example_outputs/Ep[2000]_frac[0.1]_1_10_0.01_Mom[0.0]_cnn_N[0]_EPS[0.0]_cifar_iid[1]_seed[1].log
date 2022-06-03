@@ -1,0 +1,22 @@
+Configurations: 
+ Inference during training: 0
+ Global rounds: 2000
+ Number of users: 100
+ Fraction of participants in each round: 0.1
+ Number of local epochs per round: 1
+ Local minibatch size: 10
+ Local learning rate: 0.01
+ SGD momentum: 0.0
+ NN model: cnn
+ Gradient Normalization: 0
+ Centered-constraint epsilon: 0.0
+ Dataset: cifar
+ GPU: cuda:0
+ Optimizer used: sgd
+ User data is split i.i.d : 1
+ In non-iid setting, data is split unequally: 0
+ Random seed used: 1 
+ Results after 2000 global rounds of training:
+ |---- Avg Train Accuracy: 71.94%
+ |---- Test Accuracy: 71.82%
+ Total Run Time: 11142.3864

@@ -1,0 +1,1 @@
+python3 federated_main.py --dataset=adult --model=lr --epochs=500 --iid=0 --local_ep=1 --normalize=0 --epsilon=0 --momentum=0 --frac=1 --local_bs=10 --inference=0 --num_users=2 --afl=1 --lr_lambda=0.1 --lr_afl_weight=1 --lr=0.01 --seed=1

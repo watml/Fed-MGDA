@@ -1,0 +1,1 @@
+python3 federated_main.py --epochs=2000 --local_ep=1 --model=cnn --normalize=0 --epsilon=0 --cap=1 --dataset=fmnist --iid=0 --seed=1 --gpu=cuda:0 --momentum=0 --inference=0
